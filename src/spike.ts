@@ -1,11 +1,13 @@
 /**
- * Risk spike for inline math.
+ * Size and baseline bench for maths rendering.
  *
  * Prints the same formulas inline and as display math so their size, baseline,
- * and effect on line flow can be judged side by side.
+ * and effect on line flow can be judged side by side. Started as a one-off risk
+ * spike — it answered that question (inline fractions do fit a single row) and
+ * stayed, because tuning the render scale is something only eyes can do.
  *
- * Run with: npm run spike
- * Delete once the question is settled.
+ *   npm run spike           the current default
+ *   npm run spike -- 1.2    20% larger
  */
 
 import { renderMathToPng } from "./math/toPng.js";
