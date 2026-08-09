@@ -1,0 +1,56 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (e.g. v0.2.0)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+      - name: Pack
+        run: |
+          npm pack
+          # A stable filename keeps the install command in the README working
+          # across every release.
+          mv mdterminal-*.tgz mdterminal.tgz
+
+      - name: Publish release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          gh release create "$TAG" mdterminal.tgz \
+            --title "mdTerminal $TAG" \
+            --draft \
+            --notes "## Install
+
+          \`\`\`sh
+          npm i -g https://github.com/horychen/mdTerminal/releases/download/$TAG/mdterminal.tgz
+          \`\`\`
+
+          Needs a terminal with the Kitty graphics protocol — Ghostty, Kitty, or
+          WezTerm — for images and rendered formulas. Others get text.
+
+          Node 20 or newer. No TeX, no browser."

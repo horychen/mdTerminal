@@ -56,11 +56,20 @@ is derived from your cell height; `--scale` adjusts it.
 
 ## Install
 
+From a release tarball:
+
 ```sh
-npm i -g mdterminal
+npm i -g https://github.com/horychen/mdTerminal/releases/latest/download/mdterminal.tgz
 ```
 
-Both `mdterm` and `mdterminal` are installed.
+Or from source:
+
+```sh
+git clone https://github.com/horychen/mdTerminal
+cd mdTerminal && npm install && npm run build && npm link
+```
+
+Both `mdterm` and `mdterminal` are installed as commands.
 
 ## Not yet
 
