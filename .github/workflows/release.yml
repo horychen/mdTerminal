@@ -31,10 +31,13 @@ jobs:
 
       - name: Pack
         run: |
-          npm pack
+          # Take the name npm actually produced rather than guessing it: a
+          # scoped package is `horychen-mdterminal-x.y.z.tgz`, not
+          # `mdterminal-x.y.z.tgz`, and guessing broke the 0.2.1 release.
+          packed=$(npm pack | tail -1)
           # A stable filename keeps the install command in the README working
           # across every release.
-          mv mdterminal-*.tgz mdterminal.tgz
+          mv "$packed" mdterminal.tgz
 
       - name: Publish release
         env:
