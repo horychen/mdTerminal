@@ -12,9 +12,10 @@ import { dirname, isAbsolute, resolve } from "node:path";
 import type { Root, RootContent, PhrasingContent, TableRow } from "mdast";
 import { renderMathToPng } from "./math/toPng.js";
 import { toUnicode } from "./math/unicode.js";
+import { renderMermaidToPng } from "./mermaid/toPng.js";
 import { encodeImage } from "./terminal/kitty.js";
 import { highlightCode } from "./terminal/highlight.js";
-import { bold, color, dim, italic, strikethrough, underline, visibleWidth } from "./terminal/ansi.js";
+import { bold, color, dim, hexToRgb, italic, strikethrough, underline, visibleWidth } from "./terminal/ansi.js";
 import type { TerminalMetrics } from "./terminal/metrics.js";
 
 export type RenderContext = {
@@ -44,6 +45,37 @@ async function renderImageFile(
   } catch {
     return null;
   }
+}
+
+/**
+ * Mermaid's own theme is chosen from the terminal's foreground: light text
+ * means a dark terminal, which wants the dark diagram palette.
+ */
+function diagramTheme(foreground: string): "default" | "dark" {
+  const rgb = hexToRgb(foreground);
+  if (!rgb) {
+    return "dark";
+  }
+
+  const luminance = (0.2126 * rgb.r + 0.7152 * rgb.g + 0.0722 * rgb.b) / 255;
+  return luminance > 0.5 ? "dark" : "default";
+}
+
+async function renderDiagram(
+  code: string,
+  context: RenderContext,
+): Promise<string | null> {
+  if (!context.graphics) {
+    return null;
+  }
+
+  const maxWidthPx = (context.metrics.columns - 4) * context.metrics.cellWidthPx;
+  const diagram = await renderMermaidToPng(code, {
+    theme: diagramTheme(context.foreground),
+    maxWidthPx,
+  });
+
+  return diagram ? encodeImage(diagram.png, {}) : null;
 }
 
 async function renderMath(
@@ -221,6 +253,15 @@ async function renderBlock(
     }
 
     case "code": {
+      if (node.lang === "mermaid") {
+        const diagram = await renderDiagram(node.value, context);
+        if (diagram) {
+          return [`${indent}  ${diagram}`, ""];
+        }
+        // Falls through to the highlighted source, which is what a reader
+        // without a browser should see rather than an error.
+      }
+
       const highlighted = await highlightCode(node.value, node.lang ?? null);
       const lines = highlighted.split("\n").map((line) => `${indent}  ${line}`);
       return [dim(`${indent}  ${node.lang ?? "text"}`), ...lines, ""];

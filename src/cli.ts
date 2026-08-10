@@ -9,6 +9,7 @@ import remarkMath from "remark-math";
 import type { Root } from "mdast";
 import { normalizeTexDelimiters } from "./normalizeTexDelimiters.js";
 import { remarkGuardInlineMath } from "./guardInlineMath.js";
+import { closeBrowser } from "./mermaid/toPng.js";
 import { renderDocument, type RenderContext } from "./render.js";
 import {
   exPxForCell,
@@ -117,7 +118,12 @@ async function main(): Promise<void> {
     graphics: options.graphics && process.stdout.isTTY === true,
   };
 
-  process.stdout.write(`${await renderDocument(tree, context)}\n`);
+  try {
+    process.stdout.write(`${await renderDocument(tree, context)}\n`);
+  } finally {
+    // A borrowed browser keeps the process alive until it is let go.
+    await closeBrowser();
+  }
 }
 
 main().catch((error: unknown) => {

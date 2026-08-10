@@ -45,6 +45,21 @@ whitespace hugging its delimiters.
 maths is exactly the colour of the text beside it and follows your theme. Size
 is derived from your cell height; `--scale` adjusts it.
 
+## Mermaid diagrams
+
+Fenced `mermaid` blocks are drawn as pictures.
+
+Mermaid sizes every node by measuring its rendered label, and only a real
+browser measures text correctly — so mdTerminal borrows one. It looks for
+Chrome, Chromium, Brave, or Edge already installed on your machine and drives
+it headlessly. Nothing is downloaded.
+
+**Without a browser you get the diagram source, syntax-highlighted** — no
+error, no missing section.
+
+The first diagram costs roughly three seconds while the browser starts.
+Results are cached on disk, so the same document opens instantly next time.
+
 ## Options
 
 | Flag | Effect |
@@ -53,6 +68,9 @@ is derived from your cell height; `--scale` adjusts it.
 | `--no-graphics` | Never emit images; print text placeholders |
 | `--color <hex>` | Formula colour, overriding the terminal's foreground |
 | `-h`, `--help` | Usage |
+
+`MDTERM_BROWSER` names a specific browser binary for diagrams, overriding the
+search.
 
 ## Install
 

@@ -1,6 +1,6 @@
 {
   "name": "mdterminal",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Read Markdown in the terminal, with images and LaTeX math actually rendered.",
   "type": "module",
   "bin": {
@@ -21,6 +21,8 @@
   "dependencies": {
     "@resvg/resvg-js": "^2.6.2",
     "mathjax-full": "^3.2.1",
+    "mermaid": "^11.16.1",
+    "puppeteer-core": "^25.5.0",
     "remark-gfm": "^4.0.1",
     "remark-math": "^6.0.0",
     "remark-parse": "^11.0.0",
