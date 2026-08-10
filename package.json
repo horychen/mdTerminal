@@ -1,11 +1,11 @@
 {
-  "name": "mdterminal",
+  "name": "@horychen/mdterminal",
   "version": "0.2.0",
   "description": "Read Markdown in the terminal, with images and LaTeX math actually rendered.",
   "type": "module",
   "bin": {
-    "mdterm": "./dist/cli.js",
-    "mdterminal": "./dist/cli.js"
+    "mdterm": "dist/cli.js",
+    "mdterminal": "dist/cli.js"
   },
   "files": [
     "dist"

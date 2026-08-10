@@ -74,7 +74,14 @@ search.
 
 ## Install
 
-From a release tarball:
+```sh
+npm i -g @horychen/mdterminal
+```
+
+Installs both `mdterm` and `mdterminal` as commands — the package name is
+scoped, but what you type is not.
+
+Or from a release tarball:
 
 ```sh
 npm i -g https://github.com/horychen/mdTerminal/releases/latest/download/mdterminal.tgz
@@ -87,7 +94,7 @@ git clone https://github.com/horychen/mdTerminal
 cd mdTerminal && npm install && npm run build && npm link
 ```
 
-Both `mdterm` and `mdterminal` are installed as commands.
+
 
 ## Not yet
 
