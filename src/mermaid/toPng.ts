@@ -98,10 +98,25 @@ function buildPage(mermaidSource: string, theme: string): string {
 <div id="target"></div>
 <script>${mermaidSource}</script>
 <script>
+  // useMaxWidth defaults on, which stretches each diagram to the container's
+  // width. A naturally narrow state diagram then blows up while a naturally
+  // wide flowchart stays put, so the two end up at visibly different text
+  // sizes in the same document. Off, every diagram renders at its own scale.
+  // (No backticks in here: this whole page is a template literal.)
+  const noStretch = { useMaxWidth: false };
   window.mermaid.initialize({
     startOnLoad: false,
     theme: ${JSON.stringify(theme)},
     securityLevel: 'strict',
+    flowchart: noStretch,
+    sequence: noStretch,
+    state: noStretch,
+    class: noStretch,
+    er: noStretch,
+    journey: noStretch,
+    gantt: noStretch,
+    pie: noStretch,
+    gitGraph: noStretch,
   });
   window.__render = async (code) => {
     const { svg } = await window.mermaid.render('diagram', code);

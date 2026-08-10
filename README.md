@@ -6,6 +6,13 @@ Read Markdown in the terminal, with images and LaTeX maths actually rendered.
 mdTerminal renders both — images through the Kitty graphics protocol, maths
 through MathJax.
 
+<p align="center">
+  <img
+    src="docs/screenshot.png"
+    alt="A Markdown document in Ghostty: a flowchart, a sequence diagram, and a state diagram drawn as pictures between coloured headings, with a malformed diagram falling back to its highlighted source."
+    width="620">
+</p>
+
 ```sh
 mdterm notes.md
 mdterm ~/research/paper.md

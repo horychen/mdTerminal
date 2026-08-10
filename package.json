@@ -1,6 +1,6 @@
 {
   "name": "@horychen/mdterminal",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Read Markdown in the terminal, with images and LaTeX math actually rendered.",
   "type": "module",
   "bin": {
