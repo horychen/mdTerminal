@@ -115,15 +115,30 @@ The two share their trickiest piece of logic: the rule that rewrites `\(...\)`
 before parsing, and the guard that keeps `$100 and $200` from being read as a
 formula.
 
+## Paging
+
+```sh
+mdterm -p notes.md
+```
+
+| Key | Action |
+| --- | --- |
+| `j` / `k` / arrows | Scroll a line |
+| `space` / `b` | Page |
+| `g` / `G` | Jump to either end |
+| `Ctrl-L` | Repaint |
+| `q` | Quit |
+
+Paging is built in rather than delegated, because `less` does not understand
+the graphics escape sequences and would drop every picture. Piping still works,
+but `mdterm` prints text placeholders whenever its output is not a terminal.
+
+Each image is transmitted once and afterwards only drawn by id, so repainting
+on every keypress stays cheap even in a document full of diagrams.
+
 ## Not yet
 
-**A pager.** This release renders a document in one pass; scrolling means your
-terminal's own scrollback. Piping to `less` will not carry the images — the
-graphics escape sequences do not survive it — so `mdterm` prints text
-placeholders whenever its output is not a terminal.
-
-An interactive pager is the next phase, and it will need to implement paging
-itself rather than delegate.
+**Search.** The pager scrolls and jumps, but has no `/`.
 
 ## Develop
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { readFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { basename, dirname, resolve } from "node:path";
 import { unified } from "unified";
 import remarkParse from "remark-parse";
 import remarkGfm from "remark-gfm";
@@ -10,7 +10,13 @@ import type { Root } from "mdast";
 import { normalizeTexDelimiters } from "./normalizeTexDelimiters.js";
 import { remarkGuardInlineMath } from "./guardInlineMath.js";
 import { closeBrowser } from "./mermaid/toPng.js";
-import { renderDocument, type RenderContext } from "./render.js";
+import { createPagerImageSink } from "./pager/imageSink.js";
+import { runPager } from "./pager/run.js";
+import {
+  inlineImageSink,
+  renderDocument,
+  type RenderContext,
+} from "./render.js";
 import {
   exPxForCell,
   readForegroundColor,
@@ -23,14 +29,18 @@ Usage:
   mdterm <file.md> [options]
 
 Options:
+  -p, --pager    Read in a full-screen pager instead of printing once
   --scale <n>    Size of rendered maths relative to the text (default 1)
   --no-graphics  Never emit images; print text placeholders instead
   --color <hex>  Formula colour, overriding the terminal's foreground
   -h, --help     Show this message
+
+In the pager: j/k or arrows scroll, space/b page, g/G jump to the ends, q quits.
 `;
 
 type Options = {
   file: string | null;
+  pager: boolean;
   scale: number;
   graphics: boolean;
   color: string | null;
@@ -40,6 +50,7 @@ type Options = {
 function parseArguments(argv: string[]): Options {
   const options: Options = {
     file: null,
+    pager: false,
     scale: 1,
     graphics: true,
     color: null,
@@ -53,6 +64,10 @@ function parseArguments(argv: string[]): Options {
       case "-h":
       case "--help":
         options.help = true;
+        break;
+      case "-p":
+      case "--pager":
+        options.pager = true;
         break;
       case "--no-graphics":
         options.graphics = false;
@@ -109,17 +124,36 @@ async function main(): Promise<void> {
     processor.parse(normalizeTexDelimiters(source)),
   ) as Root;
 
+  // The pager needs a real terminal at both ends: keys arrive on stdin, images
+  // leave on stdout. Asked for without one, it degrades to a single pass.
+  const usePager =
+    options.pager &&
+    process.stdout.isTTY === true &&
+    process.stdin.isTTY === true;
+  const pagerSink = createPagerImageSink();
+
   const context: RenderContext = {
     metrics,
     exPx: exPxForCell(metrics.cellHeightPx, options.scale),
     foreground,
     baseDir: dirname(path),
-    // Piping to a file or a pager should not spray escape sequences.
+    // Piping to a file or another program should not spray escape sequences.
     graphics: options.graphics && process.stdout.isTTY === true,
+    images: usePager ? pagerSink : inlineImageSink,
   };
 
   try {
-    process.stdout.write(`${await renderDocument(tree, context)}\n`);
+    const output = await renderDocument(tree, context);
+
+    if (usePager) {
+      await runPager({
+        lines: output.split("\n"),
+        transmissions: pagerSink.transmissions(),
+        title: basename(path),
+      });
+    } else {
+      process.stdout.write(`${output}\n`);
+    }
   } finally {
     // A borrowed browser keeps the process alive until it is let go.
     await closeBrowser();

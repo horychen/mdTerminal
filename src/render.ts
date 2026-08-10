@@ -13,10 +13,26 @@ import type { Root, RootContent, PhrasingContent, TableRow } from "mdast";
 import { renderMathToPng } from "./math/toPng.js";
 import { toUnicode } from "./math/unicode.js";
 import { renderMermaidToPng } from "./mermaid/toPng.js";
-import { encodeImage } from "./terminal/kitty.js";
+import { encodeImage, type ImagePlacement } from "./terminal/kitty.js";
 import { highlightCode } from "./terminal/highlight.js";
 import { bold, color, dim, hexToRgb, italic, strikethrough, underline, visibleWidth } from "./terminal/ansi.js";
 import type { TerminalMetrics } from "./terminal/metrics.js";
+
+/**
+ * Decides how an image reaches the screen.
+ *
+ * One-shot output transmits and draws in a single sequence, because the bytes
+ * are written once and never revisited. A pager redraws on every keypress, so
+ * it transmits each image once up front and afterwards emits only a short
+ * draw-by-id command. Same renderer, different economics.
+ */
+export type ImageSink = {
+  emit(png: Buffer, placement: ImagePlacement): string;
+};
+
+export const inlineImageSink: ImageSink = {
+  emit: (png, placement) => encodeImage(png, placement),
+};
 
 export type RenderContext = {
   metrics: TerminalMetrics;
@@ -26,6 +42,7 @@ export type RenderContext = {
   baseDir: string;
   /** Terminals without the graphics protocol get text instead of pictures. */
   graphics: boolean;
+  images: ImageSink;
 };
 
 const HEADING_COLORS = ["#7aa2f7", "#7dcfff", "#9ece6a", "#e0af68", "#bb9af7", "#c0caf5"];
@@ -41,7 +58,9 @@ async function renderImageFile(
   try {
     const path = isAbsolute(url) ? url : resolve(context.baseDir, url);
     const bytes = await readFile(path);
-    return encodeImage(bytes, { columns: Math.min(context.metrics.columns - 2, 60) });
+    return context.images.emit(bytes, {
+      columns: Math.min(context.metrics.columns - 2, 60),
+    });
   } catch {
     return null;
   }
@@ -75,7 +94,7 @@ async function renderDiagram(
     maxWidthPx,
   });
 
-  return diagram ? encodeImage(diagram.png, {}) : null;
+  return diagram ? context.images.emit(diagram.png, {}) : null;
 }
 
 async function renderMath(
@@ -102,7 +121,7 @@ async function renderMath(
       exPx: context.exPx,
       display,
     });
-    return encodeImage(math.png, {});
+    return context.images.emit(math.png, {});
   } catch {
     return dim(display ? `[${latex}]` : `$${latex}$`);
   }

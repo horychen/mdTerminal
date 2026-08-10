@@ -74,3 +74,46 @@ export function encodeImage(png: Buffer, placement: ImagePlacement): string {
 export function encodeDeleteAllImages(): string {
   return `${APC_START}a=d,d=A${APC_END}`;
 }
+
+/**
+ * Sends the image data without drawing it, storing it under `id`.
+ *
+ * A pager redraws on every keypress, and re-sending a PNG each time would make
+ * scrolling crawl. Transmitting once and then placing by id keeps each redraw
+ * to a few dozen bytes per image.
+ */
+export function encodeTransmit(id: number, png: Buffer): string {
+  const data = png.toString("base64");
+  const chunks: string[] = [];
+
+  for (let offset = 0; offset < data.length; offset += CHUNK_SIZE) {
+    const payload = data.slice(offset, offset + CHUNK_SIZE);
+    const isFirst = offset === 0;
+    const isLast = offset + CHUNK_SIZE >= data.length;
+
+    const controls = isFirst
+      ? ["a=t", "f=100", `i=${id}`, `m=${isLast ? 0 : 1}`].join(",")
+      : `m=${isLast ? 0 : 1}`;
+
+    chunks.push(encodeChunk(controls, payload));
+  }
+
+  return chunks.join("");
+}
+
+/** Draws an already-transmitted image at the cursor. */
+export function encodePlace(id: number, placement: ImagePlacement): string {
+  const controls = [
+    "a=p",
+    `i=${id}`,
+    ...(placement.columns === undefined ? [] : [`c=${placement.columns}`]),
+    ...(placement.rows === undefined ? [] : [`r=${placement.rows}`]),
+  ].join(",");
+
+  return `${APC_START}${controls}${APC_END}`;
+}
+
+/** Clears drawn images while keeping the transmitted data for reuse. */
+export function encodeClearPlacements(): string {
+  return `${APC_START}a=d,d=a${APC_END}`;
+}
