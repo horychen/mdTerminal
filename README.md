@@ -96,6 +96,18 @@ cd mdTerminal && npm install && npm run build && npm link
 
 
 
+## In a window instead
+
+[**mdViewer**](https://github.com/horychen/mdViewer) is the sibling of this
+project: the same documents — maths, images, and Mermaid diagrams all rendered
+— read in a native macOS window rather than a terminal. It has tabs, a
+source/preview split, and reader themes, and it draws diagrams without
+borrowing a browser, because it already runs in one.
+
+The two share their trickiest piece of logic: the rule that rewrites `\(...\)`
+before parsing, and the guard that keeps `$100 and $200` from being read as a
+formula.
+
 ## Not yet
 
 **A pager.** This release renders a document in one pass; scrolling means your
