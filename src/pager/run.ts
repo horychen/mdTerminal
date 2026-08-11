@@ -24,8 +24,8 @@ const CLEAR_SCREEN = `${CSI}2J${CSI}H`;
 
 export type PagerOptions = {
   lines: string[];
-  /** Sent once before the first paint: the image data itself. */
-  transmissions: string;
+  /** Turns the renderer's image markers into escape sequences. */
+  expandImages: (text: string) => string;
   title: string;
 };
 
@@ -78,11 +78,10 @@ function classify(chunk: string): Key {
 }
 
 export async function runPager(options: PagerOptions): Promise<void> {
-  const { lines, transmissions, title } = options;
+  const { lines, expandImages, title } = options;
   const out = process.stdout;
 
   let top = 0;
-  let transmitted = false;
 
   const viewportHeight = () => Math.max(1, (out.rows ?? 24) - 1);
   const maxTop = () => Math.max(0, lines.length - viewportHeight());
@@ -91,10 +90,10 @@ export async function runPager(options: PagerOptions): Promise<void> {
     const height = viewportHeight();
     const visible = lines.slice(top, top + height);
 
-    // Placements are cleared, not the images themselves: the transmitted data
-    // stays resident so the next paint is cheap.
     let frame = encodeClearPlacements() + CLEAR_SCREEN;
-    frame += visible.join("\r\n");
+    // Only the images on this screen are sent, so the cost of a repaint is
+    // bounded by the viewport rather than by the length of the document.
+    frame += expandImages(visible.join("\r\n"));
 
     const atEnd = top >= maxTop();
     const position = lines.length ? Math.round((top / Math.max(1, maxTop())) * 100) : 100;
@@ -138,10 +137,6 @@ export async function runPager(options: PagerOptions): Promise<void> {
   out.on("resize", onResize);
 
   try {
-    if (!transmitted) {
-      out.write(transmissions);
-      transmitted = true;
-    }
     paint();
 
     for (;;) {

@@ -1,38 +1,53 @@
 /**
- * The pager's image strategy: transmit once, then draw by id.
+ * The pager's image strategy: keep the pictures aside, draw the visible ones.
  *
- * Scrolling repaints the whole window on every keypress. Re-sending a diagram's
- * PNG each time would make the pager unusable — a single Mermaid figure runs to
- * tens of kilobytes of base64. Here each image is transmitted once before the
- * first paint, and every repaint costs a few dozen bytes per visible image.
+ * The first attempt transmitted every image once under an id and then drew by
+ * id on each repaint, which is what the protocol is designed for. Nothing
+ * appeared: between the transmission and the first placement the pager clears
+ * the screen, and the images did not survive it in practice.
+ *
+ * So instead the renderer leaves a marker in the text, and the pager expands
+ * only the markers inside the slice it is about to paint. That reuses the exact
+ * path one-shot output already proves works, and the cost is bounded by what
+ * fits on screen rather than by the size of the document.
  */
 
 import type { ImageSink } from "../render.js";
-import {
-  encodePlace,
-  encodeTransmit,
-  type ImagePlacement,
-} from "../terminal/kitty.js";
+import { encodeImage, type ImagePlacement } from "../terminal/kitty.js";
+
+// Private-use code points, spelled numerically so they stay visible in the
+// source: they will not occur in a Markdown document, and they survive slicing
+// and joining as ordinary characters.
+const MARKER_START = String.fromCharCode(0xe000);
+const MARKER_END = String.fromCharCode(0xe001);
+
+const MARKER_PATTERN = new RegExp(`${MARKER_START}(\\d+)${MARKER_END}`, "g");
 
 export type CollectingImageSink = ImageSink & {
-  /** Everything that must reach the terminal before the first paint. */
-  transmissions(): string;
+  /** Replaces markers in `text` with the escape sequences that draw them. */
+  expand(text: string): string;
+  count(): number;
 };
 
 export function createPagerImageSink(): CollectingImageSink {
-  const transmits: string[] = [];
-  // Ids start above zero because 0 means "unspecified" in the protocol.
-  let nextId = 1;
+  const images: { png: Buffer; placement: ImagePlacement }[] = [];
 
   return {
     emit(png: Buffer, placement: ImagePlacement): string {
-      const id = nextId++;
-      transmits.push(encodeTransmit(id, png));
-      return encodePlace(id, placement);
+      const index = images.length;
+      images.push({ png, placement });
+      return `${MARKER_START}${index}${MARKER_END}`;
     },
 
-    transmissions(): string {
-      return transmits.join("");
+    expand(text: string): string {
+      return text.replace(MARKER_PATTERN, (_match, index: string) => {
+        const image = images[Number(index)];
+        return image ? encodeImage(image.png, image.placement) : "";
+      });
+    },
+
+    count(): number {
+      return images.length;
     },
   };
 }

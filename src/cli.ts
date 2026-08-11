@@ -148,7 +148,7 @@ async function main(): Promise<void> {
     if (usePager) {
       await runPager({
         lines: output.split("\n"),
-        transmissions: pagerSink.transmissions(),
+        expandImages: (text) => pagerSink.expand(text),
         title: basename(path),
       });
     } else {
