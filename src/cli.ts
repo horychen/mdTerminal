@@ -140,6 +140,7 @@ async function main(): Promise<void> {
     // Piping to a file or another program should not spray escape sequences.
     graphics: options.graphics && process.stdout.isTTY === true,
     images: usePager ? pagerSink : inlineImageSink,
+    reserveImageRows: usePager,
   };
 
   try {

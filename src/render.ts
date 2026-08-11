@@ -43,6 +43,15 @@ export type RenderContext = {
   /** Terminals without the graphics protocol get text instead of pictures. */
   graphics: boolean;
   images: ImageSink;
+  /**
+   * Pad each picture out to the rows it covers.
+   *
+   * Only the pager wants this. Printing once, the terminal itself walks the
+   * cursor past an image, so padding as well would double the gap. The pager
+   * places every line at an absolute row instead, and needs the line model to
+   * match what the screen will show.
+   */
+  reserveImageRows: boolean;
 };
 
 const HEADING_COLORS = ["#7aa2f7", "#7dcfff", "#9ece6a", "#e0af68", "#bb9af7", "#c0caf5"];
@@ -88,7 +97,9 @@ async function renderImageFile(
     // Both counts are given, so the row budget reserved below is exactly what
     // the terminal will use.
     const escape = context.images.emit(bytes, { columns, rows });
-    return [escape, ...Array.from({ length: rows - 1 }, () => " ")];
+    return context.reserveImageRows
+      ? [escape, ...Array.from({ length: rows - 1 }, () => " ")]
+      : [escape];
   } catch {
     return null;
   }
@@ -114,8 +125,19 @@ function diagramTheme(foreground: string): "default" | "dark" {
  * screen in agreement — without it, whatever follows is drawn over the image,
  * and a pager counting lines concludes the document fits on one screen.
  */
-function asBlock(escape: string, heightPx: number, cellHeightPx: number): string[] {
-  const rows = Math.max(1, Math.ceil(heightPx / cellHeightPx));
+function asBlock(
+  escape: string,
+  heightPx: number,
+  context: RenderContext,
+): string[] {
+  if (!context.reserveImageRows) {
+    return [escape];
+  }
+
+  const rows = Math.max(
+    1,
+    Math.ceil(heightPx / context.metrics.cellHeightPx),
+  );
   // A space, not an empty string: renderDocument collapses runs of blank lines,
   // and it would eat the very rows being reserved here.
   return [escape, ...Array.from({ length: rows - 1 }, () => " ")];
@@ -139,11 +161,7 @@ async function renderDiagram(
     return null;
   }
 
-  return asBlock(
-    context.images.emit(diagram.png, {}),
-    diagram.heightPx,
-    context.metrics.cellHeightPx,
-  );
+  return asBlock(context.images.emit(diagram.png, {}), diagram.heightPx, context);
 }
 
 async function renderMath(
@@ -361,11 +379,7 @@ async function renderBlock(
             exPx: context.exPx,
             display: true,
           });
-          const block = asBlock(
-            context.images.emit(math.png, {}),
-            math.heightPx,
-            context.metrics.cellHeightPx,
-          );
+          const block = asBlock(context.images.emit(math.png, {}), math.heightPx, context);
           return [`${indent}  ${block[0]}`, ...block.slice(1), ""];
         } catch {
           // Falls through to the text form below.

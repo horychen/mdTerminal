@@ -91,9 +91,15 @@ export async function runPager(options: PagerOptions): Promise<void> {
     const visible = lines.slice(top, top + height);
 
     let frame = encodeClearPlacements() + CLEAR_SCREEN;
-    // Only the images on this screen are sent, so the cost of a repaint is
-    // bounded by the viewport rather than by the length of the document.
-    frame += expandImages(visible.join("\r\n"));
+
+    // Every line is placed at an absolute row rather than reached by newlines.
+    // Drawing an image moves the cursor by an amount that depends on the
+    // terminal, and one picture's worth of drift would push everything below it
+    // out of place. Only the images on this screen are sent, so a repaint costs
+    // what the viewport holds, not what the document holds.
+    visible.forEach((line, index) => {
+      frame += `${CSI}${index + 1};1H` + expandImages(line);
+    });
 
     const atEnd = top >= maxTop();
     const position = lines.length ? Math.round((top / Math.max(1, maxTop())) * 100) : 100;
