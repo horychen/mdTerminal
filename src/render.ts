@@ -47,10 +47,24 @@ export type RenderContext = {
 
 const HEADING_COLORS = ["#7aa2f7", "#7dcfff", "#9ece6a", "#e0af68", "#bb9af7", "#c0caf5"];
 
+/** Width and height from a PNG's IHDR, or null for any other format. */
+function pngSize(bytes: Buffer): { width: number; height: number } | null {
+  const isPng =
+    bytes.length > 24 && bytes.readUInt32BE(0) === 0x89504e47;
+
+  return isPng
+    ? { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) }
+    : null;
+}
+
+// Used when the format's dimensions cannot be read. Both cell counts are then
+// stated explicitly, so the layout is predictable even if the aspect is not.
+const UNKNOWN_IMAGE_ROWS = 10;
+
 async function renderImageFile(
   url: string,
   context: RenderContext,
-): Promise<string | null> {
+): Promise<string[] | null> {
   if (!context.graphics || /^[a-z][a-z0-9+.-]*:/i.test(url)) {
     return null;
   }
@@ -58,9 +72,23 @@ async function renderImageFile(
   try {
     const path = isAbsolute(url) ? url : resolve(context.baseDir, url);
     const bytes = await readFile(path);
-    return context.images.emit(bytes, {
-      columns: Math.min(context.metrics.columns - 2, 60),
-    });
+
+    const columns = Math.min(context.metrics.columns - 2, 60);
+    const size = pngSize(bytes);
+    const rows = size
+      ? Math.max(
+          1,
+          Math.round(
+            (columns * context.metrics.cellWidthPx * (size.height / size.width)) /
+              context.metrics.cellHeightPx,
+          ),
+        )
+      : UNKNOWN_IMAGE_ROWS;
+
+    // Both counts are given, so the row budget reserved below is exactly what
+    // the terminal will use.
+    const escape = context.images.emit(bytes, { columns, rows });
+    return [escape, ...Array.from({ length: rows - 1 }, () => " ")];
   } catch {
     return null;
   }
@@ -80,10 +108,23 @@ function diagramTheme(foreground: string): "default" | "dark" {
   return luminance > 0.5 ? "dark" : "default";
 }
 
+/**
+ * A picture occupies many rows of the character grid, but the renderer emits
+ * one string per line. Padding with blank lines keeps the line model and the
+ * screen in agreement — without it, whatever follows is drawn over the image,
+ * and a pager counting lines concludes the document fits on one screen.
+ */
+function asBlock(escape: string, heightPx: number, cellHeightPx: number): string[] {
+  const rows = Math.max(1, Math.ceil(heightPx / cellHeightPx));
+  // A space, not an empty string: renderDocument collapses runs of blank lines,
+  // and it would eat the very rows being reserved here.
+  return [escape, ...Array.from({ length: rows - 1 }, () => " ")];
+}
+
 async function renderDiagram(
   code: string,
   context: RenderContext,
-): Promise<string | null> {
+): Promise<string[] | null> {
   if (!context.graphics) {
     return null;
   }
@@ -94,7 +135,15 @@ async function renderDiagram(
     maxWidthPx,
   });
 
-  return diagram ? context.images.emit(diagram.png, {}) : null;
+  if (!diagram) {
+    return null;
+  }
+
+  return asBlock(
+    context.images.emit(diagram.png, {}),
+    diagram.heightPx,
+    context.metrics.cellHeightPx,
+  );
 }
 
 async function renderMath(
@@ -155,11 +204,12 @@ async function renderInline(
         parts.push(`${underline(label)}${dim(` (${node.url})`)}`);
         break;
       }
-      case "image": {
-        const image = await renderImageFile(node.url, context);
-        parts.push(image ?? dim(`[image: ${node.alt ?? node.url}]`));
+      case "image":
+        // Only an image that owns its paragraph becomes a picture; see the
+        // paragraph case below. One sitting mid-sentence cannot reserve the
+        // rows it needs without pushing the sentence apart.
+        parts.push(dim(`[image: ${node.alt ?? node.url}]`));
         break;
-      }
       case "break":
         parts.push("\n");
         break;
@@ -228,8 +278,19 @@ async function renderBlock(
       return ["", `${indent}${bold(color(text, hue))}`, ""];
     }
 
-    case "paragraph":
+    case "paragraph": {
+      // A lone image is the usual way pictures appear, and owning the paragraph
+      // is what lets it claim the rows it needs.
+      const only = node.children.length === 1 ? node.children[0] : null;
+      if (only?.type === "image") {
+        const block = await renderImageFile(only.url, context);
+        if (block) {
+          return [`${indent}  ${block[0]}`, ...block.slice(1), ""];
+        }
+      }
+
       return [`${indent}${await renderInline(node.children, context)}`, ""];
+    }
 
     case "blockquote": {
       const inner: string[] = [];
@@ -275,7 +336,11 @@ async function renderBlock(
       if (node.lang === "mermaid") {
         const diagram = await renderDiagram(node.value, context);
         if (diagram) {
-          return [`${indent}  ${diagram}`, ""];
+          return [
+            `${indent}  ${diagram[0]}`,
+            ...diagram.slice(1),
+            "",
+          ];
         }
         // Falls through to the highlighted source, which is what a reader
         // without a browser should see rather than an error.
@@ -286,11 +351,29 @@ async function renderBlock(
       return [dim(`${indent}  ${node.lang ?? "text"}`), ...lines, ""];
     }
 
-    case "math":
-      return [
-        `${indent}  ${await renderMath((node as { value: string }).value, true, context)}`,
-        "",
-      ];
+    case "math": {
+      const latex = (node as { value: string }).value;
+
+      if (context.graphics) {
+        try {
+          const math = await renderMathToPng(latex, {
+            color: context.foreground,
+            exPx: context.exPx,
+            display: true,
+          });
+          const block = asBlock(
+            context.images.emit(math.png, {}),
+            math.heightPx,
+            context.metrics.cellHeightPx,
+          );
+          return [`${indent}  ${block[0]}`, ...block.slice(1), ""];
+        } catch {
+          // Falls through to the text form below.
+        }
+      }
+
+      return [`${indent}  ${dim(`[${latex}]`)}`, ""];
+    }
 
     case "table":
       return [...(await renderTable(node.children, context)), ""];
